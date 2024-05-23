@@ -1,4 +1,4 @@
-function [GlomSession] = GetAllGlomResponseTraces(FolderPath,FrameIndices)
+function [GlomTraces, ROIList] = GetAllGlomResponseTraces(FolderPath,FrameIndices)
 
 % get all files in the folder
 AllFiles = dir([FolderPath,filesep,'O*_R*_s*.tif']);
@@ -36,9 +36,5 @@ for thisTrial = 1:numel(AllFiles) % every trial
         
 end
 
-% All outputs
-GlomSession.Traces = GlomTraces;
-GlomSession.ROI_index = ROIList;
-%GlomSession.TrialSequence = TrialSequence;
     
 

@@ -148,7 +148,7 @@ if ~isempty(ROIs)
     axes(handles.axes4);
     handles.I3 = imagesc(0*ROIs);
     handles.I3.AlphaData = 0*ROIs;
-    colormap(handles.axes4,brewermap(numel(unique(handles.MyImage(:,:,3)))-1,'*Set1'));
+    handles.colororder = colormap(handles.axes4,brewermap(numel(unique(handles.MyImage(:,:,3)))-1,'*Set1'));
     handles.axes4.Color = 'none';
     set(handles.I3,'ButtonDownFcn', {@thisROICallback, handles, hObject});
     set(gca, 'XTick', [], 'YTick', []);
@@ -206,16 +206,12 @@ if exist(fullfile(handles.ImagingPath.String,'AllGloms.mat'))
     load(fullfile(handles.ImagingPath.String,'AllGloms.mat'), 'GlomSession');
     %ROIs = GlomSession.ROImasks;
     GlomTraces = GlomSession.Traces;
+    handles.TrialSequence = GlomSession.TrialSequence;
+    handles.ROIList = GlomSession.ROI_index;
 else
-
-
-[GlomTraces, handles.ROIList] = GetGlomTraces(handles.MyImage(:,:,3),...
-                [], ...
-                handles.ImagingPath.String, ...
-                handles.ImageSize, ...
-                handles.TrialSequence(MyTrials,[3 5 6 7 8]), ...
-                handles.FrameWindow.Data);
+    [GlomSession] = GetAllGlomResponseTraces(handles.ImagingPath.String,[1 handles.StimulusSettings.Data(3)+20]);
 end
+
 axes(handles.axes6);
 %typicalResponse = mode(max()); 
 nROIs = size(GlomTraces,1);
@@ -230,7 +226,12 @@ StimStop = StimStart + handles.StimulusSettings.Data(3) - handles.StimulusSettin
 fill([StimStart StimStart StimStop StimStop], [yLim(1) yLim(2) yLim(2) yLim(1)], [0.8 0.8 0.8],...
     'EdgeColor', 'none', 'FaceAlpha', 0.5);
 hold on
-plot(GlomTraces(:,1:taxis,2)'+ repmat(0.1*(1:nROIs)',1,taxis)');
+
+for rep = 1:numel(whichReps)
+    set(gca,'colororder',handles.colororder);
+    TrialIdx = find(ismember(handles.TrialSequence(:,1:2),[whichOdor whichReps(rep)],'rows')) ;
+    plot(GlomTraces(:,1:taxis,TrialIdx)'+ repmat(0.1*(1:nROIs)',1,taxis)');
+end
 set(gca,'XTick',[], 'XLim',[0 taxis], 'YTick', []);
 
 handles.GlomTraces = GlomTraces;
@@ -242,6 +243,8 @@ function thisROICallback(object_handle, ~, handles, hObject)
 handles = guidata(hObject);
 axes_handle  = get(object_handle,'Parent');
 coordinates = round(get(axes_handle,'CurrentPoint'));
+whichOdor      = str2num(cell2mat(handles.OdorList.String(handles.OdorList.Value)));
+whichReps       = str2num(cell2mat(handles.RepeatList.String(handles.RepeatList.Value)));
 
 switch get(gcf,'SelectionType')
     case 'normal'
@@ -253,10 +256,12 @@ switch get(gcf,'SelectionType')
             handles.MyImage(:,:,4) = thisROI;
             
             ROIidx = find(handles.ROIList == whichROI);
+            
             axes(handles.axes7);
             taxis = size(handles.GlomTraces,2) - 10;
+            TrialIdx = find(ismember(handles.TrialSequence(:,1:2),[whichOdor whichReps(1)],'rows')) ;
             hold off
-            plot(handles.GlomTraces(ROIidx,1:taxis,2));
+            plot(handles.GlomTraces(ROIidx,1:taxis,TrialIdx));
             yLim = get(gca,'YLim');
             
             % draw stimulus box
@@ -265,7 +270,11 @@ switch get(gcf,'SelectionType')
             fill([StimStart StimStart StimStop StimStop], [yLim(1) yLim(2) yLim(2) yLim(1)], [0.8 0.8 0.8],...
                 'EdgeColor', 'none', 'FaceAlpha', 0.5);
             hold on
-            plot(handles.GlomTraces(ROIidx,1:taxis,2));
+            
+            for rep = 1:numel(whichReps)
+                TrialIdx = find(ismember(handles.TrialSequence(:,1:2),[whichOdor whichReps(rep)],'rows')) ;
+                plot(handles.GlomTraces(ROIidx,1:taxis,TrialIdx),'color',handles.colororder(ROIidx,:));
+            end
             set(gca,'XTick',[], 'XLim',[0 taxis], 'YTick', []);
         end
         guidata(hObject, handles);
@@ -284,72 +293,6 @@ function ImageScale_CellEditCallback(hObject, eventdata, handles)
 NewScale = flipud(handles.ImageScale.Data(:,2));
 axes(handles.axes1);
 set(gca,'CLim',NewScale);
-
-% Update handles structure
-guidata(hObject, handles);
-
-
-function Threshold_Callback(hObject, eventdata, handles)
-%        str2double(get(hObject,'String')) returns contents of Threshold as a double
-MyThresh = str2double(handles.Threshold.String);
-ThreshedImage = ones(handles.ImageSize(1), handles.ImageSize(2));
-ThreshedImage(find(handles.MyImage(:,:,1)>MyThresh)) = 0; % all responsive areas will be dark
-handles.MyImage(:,:,2) = ThreshedImage;
-GreyImage = handles.MyImage(:,:,1);
-GreyImage(find(handles.MyImage(:,:,1)>MyThresh)) = MyThresh; % all responsive areas will be saturated
-axes(handles.axes2);
-%handles.I2 = imagesc(logical(ThreshedImage));
-handles.I2 = imagesc(GreyImage);
-colormap(handles.axes2,brewermap([],'Greys'));
-set(gca, 'XTick', [], 'YTick', []);
-
-% Update handles structure
-guidata(hObject, handles);
-
-updateROIs(hObject, [], handles);
-
-function newROICallback(object_handle, ~, handles, hObject)
-handles = guidata(hObject);
-axes_handle  = get(object_handle,'Parent');
-coordinates = round(get(axes_handle,'CurrentPoint'));
-
-switch get(gcf,'SelectionType')
-    case 'normal' % Click left mouse button.
-        handles.currCoords = fliplr(coordinates(1,1:2));
-        guidata(hObject, handles);
-        handles = updateROIs(hObject, [], handles);
-    otherwise
-end
-
-% Update handles structure
-guidata(hObject, handles);
-
-function Image2Callback(object_handle, ~, handles, hObject)
-handles = guidata(hObject);
-axes_handle  = get(object_handle,'Parent');
-coordinates = round(get(axes_handle,'CurrentPoint'));
-
-switch get(gcf,'SelectionType')
-    case 'normal' % Click left mouse button.
-        handles.currCoords = fliplr(coordinates(1,1:2));
-        guidata(hObject, handles);
-        handles = updateROIs(hObject, [], handles);
-    case 'extend'  %Center-click or shift + click
-        currCoords = fliplr(coordinates(1,1:2));
-        whichROI = handles.MyImage(currCoords(1),currCoords(2),3);
-        if whichROI
-            thisROI = 0*handles.MyImage(:,:,4);
-            thisROI(find(handles.MyImage(:,:,3)==whichROI)) = 0.5;
-            handles.MyImage(:,:,4) = thisROI;
-            allROIs = handles.MyImage(:,:,3);
-            allROIs(find(handles.MyImage(:,:,3)==whichROI)) = 0;
-            handles.MyImage(:,:,3) = allROIs;
-            handles.ROIcount.String = num2str(numel(unique(handles.MyImage(:,:,3)))-1);
-        end
-        guidata(hObject, handles);
-        handles = updateROIs(hObject, [], handles);
-    otherwise
-end
 
 % Update handles structure
 guidata(hObject, handles);
@@ -375,67 +318,4 @@ colormap(handles.axes4,brewermap(3,'*Set1'));
 handles.axes4.Color = 'none';
 
 % Update handles structure
-guidata(hObject, handles);
-
-% --- Executes on key press with focus on figure1 or any of its controls.
-function figure1_WindowKeyPressFcn(hObject, eventdata, handles)
-% hObject    handle to figure1 (see GCBO)
-% eventdata  structure with the following fields (see MATLAB.UI.FIGURE)
-%	Key: name of the key that was pressed, in lower case
-%	Character: character interpretation of the key(s) that was pressed
-%	Modifier: name(s) of the modifier key(s) (i.e., control, shift) pressed
-% handles    structure with handles and user data (see GUIDATA)
-handles = guidata(hObject);
-OldThresh = str2double(handles.Threshold.String);
-ThresholdStep = 0.01;
-NewThresh = OldThresh;
-switch get(gcf,'CurrentCharacter')
-    case 'q'
-        NewThresh = OldThresh - 10*ThresholdStep;
-    case 'e'
-        NewThresh = OldThresh + 10*ThresholdStep;
-    case 'a'
-        NewThresh = OldThresh - ThresholdStep;
-    case 'd'
-        NewThresh = OldThresh + ThresholdStep;
-    case 'z'
-        NewThresh = OldThresh - ThresholdStep/10;
-    case 'c'
-        NewThresh = OldThresh + ThresholdStep/10;
-    case 't'
-        % add current ROI to ROI list
-        handles.MyImage(:,:,3)  = (1+max(max(handles.MyImage(:,:,3))))*ceil(handles.MyImage(:,:,4)) + handles.MyImage(:,:,3);
-        handles.MyImage(:,:,4)  = 0*handles.MyImage(:,:,4);
-        handles.ROIcount.String = num2str(numel(unique(handles.MyImage(:,:,3)))-1);
-        handles.currCoords = [];
-        guidata(hObject, handles);
-        updateROIs(hObject, [], handles);
-    otherwise
-end
-
-if NewThresh~=OldThresh
-    handles.Threshold.String = num2str(NewThresh);
-    guidata(hObject, handles);
-    Threshold_Callback(hObject, [], handles);
-end
-
-
-
-
-% --- Executes on button press in SaveROIs.
-function SaveROIs_Callback(hObject, eventdata, handles)
-% hObject    handle to SaveROIs (see GCBO)
-% eventdata  reserved - to be defined in a future version of MATLAB
-% handles    structure with handles and user data (see GUIDATA)
-ROIs = squeeze(handles.MyImage(:,:,3));
-save(fullfile(handles.ImagingPath.String,'GlomerularMasks.mat'), 'ROIs');
-
-
-% --- Executes on button press in OverlayROIs.
-function OverlayROIs_Callback(hObject, eventdata, handles)
-if handles.OverlayROIs.Value
-    handles.I3.AlphaData = ceil(handles.I3.CData);
-else
-    handles.I3.AlphaData = handles.I3.AlphaData*0;
-end
 guidata(hObject, handles);
