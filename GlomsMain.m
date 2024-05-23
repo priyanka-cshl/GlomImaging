@@ -355,8 +355,10 @@ ROIs = squeeze(handles.MyImage(:,:,3));
 save(fullfile(handles.ImagingPath.String,'GlomerularMasks.mat'), 'ROIs');
 disp('saving');
 if handles.SaveTraces.Value
-    [GlomSession] = GetAllGlomResponseTraces(handles.ImagingPath.String, [1 handles.StimulusSettings.Data(3)+20]);
+    [GlomTraces, ROIList] = GetAllGlomResponseTraces(handles.ImagingPath.String, [1 handles.StimulusSettings.Data(3)+20]);
 end
+GlomSession.Traces = GlomTraces;
+GlomSession.ROI_index = ROIList;
 GlomSession.ROImasks = ROIs;
 GlomSession.TrialSequence = handles.TrialSequence;
 save(fullfile(handles.ImagingPath.String,'AllGloms.mat'), 'GlomSession');
